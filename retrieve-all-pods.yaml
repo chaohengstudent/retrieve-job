@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: curl-service-account
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: curl-role
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: curl-role-binding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: curl-service-account
+roleRef:
+  kind: Role
+  name: curl-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retrieve-job
+  namespace: default
+spec:
+  completions: 1
+  template:
+    spec:
+      serviceAccountName: curl-service-account
+      containers:
+        - name: curl-container
+          image: curlimages/curl
+          command: ["/bin/sh", "-c"]
+          args:
+          - |
+            KUBERNETES_URL="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT"
+            TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+            curl -k -H "Authorization: Bearer $TOKEN" $KUBERNETES_URL/api/v1/namespaces/default/pods
+      restartPolicy: Never
